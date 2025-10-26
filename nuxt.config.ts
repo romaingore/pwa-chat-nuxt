@@ -1,6 +1,6 @@
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ["@pinia/nuxt", "@vite-pwa/nuxt"],
+  modules: ["@pinia/nuxt", "@vite-pwa/nuxt", "@nuxtjs/tailwindcss"],
   app: {
     head: {
       title: "PWA Chat (Nuxt)",

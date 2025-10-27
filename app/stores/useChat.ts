@@ -4,8 +4,9 @@ import type { Room, Message } from "~/types/chat";
 
 export const useChat = defineStore("chat", {
   state: () => ({
-    rooms: lsRead<Room[]>("rooms", []),
-    messages: lsRead<Message[]>("messages", []),
+    rooms: [] as Room[],
+    messages: [] as Message[],
+    hydrated: false,
   }),
 
   getters: {
@@ -17,15 +18,26 @@ export const useChat = defineStore("chat", {
   },
 
   actions: {
+    ensureHydrated() {
+      if (this.hydrated || import.meta.server) {
+        return;
+      }
+      this.rooms = lsRead<Room[]>("rooms", []);
+      this.messages = lsRead<Message[]>("messages", []);
+      this.hydrated = true;
+    },
     upsertRooms(next: Room[]) {
+      this.ensureHydrated();
       this.rooms = next;
       lsWrite("rooms", this.rooms);
     },
     addMessage(m: Message) {
+      this.ensureHydrated();
       this.messages.push(m);
       lsWrite("messages", this.messages);
     },
     leaveRoom(roomId: string) {
+      this.ensureHydrated();
       this.rooms = this.rooms.map((r) =>
         r.id === roomId ? { ...r, joined: false } : r
       );

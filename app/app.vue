@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useChat } from "~/stores/useChat";
 
 const online = ref(true);
+const chat = useChat();
 
 onMounted(() => {
+  chat.ensureHydrated();
   online.value = navigator.onLine;
   window.addEventListener("online", () => (online.value = true));
   window.addEventListener("offline", () => (online.value = false));

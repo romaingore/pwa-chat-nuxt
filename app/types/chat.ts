@@ -15,5 +15,9 @@ export type Message = {
   author: string;
   text?: string;
   photoDataUrl?: string;
+  location?: {
+    lat: number;
+    lng: number;
+  };
   ts: number;
 };

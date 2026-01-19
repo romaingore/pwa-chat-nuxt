@@ -215,6 +215,31 @@ export const useChat = defineStore("chat", {
       }
     },
 
+    /**
+     * Envoie une localisation
+     */
+    sendLocation(lat: number, lng: number, roomId: string) {
+      const locationText = `📍 Position partagée: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+      // Ajoute le message en local avec les coordonnées
+      const localMessage: Message = {
+        id: crypto.randomUUID(),
+        roomId,
+        author: this.currentPseudo || "Moi",
+        text: locationText,
+        location: { lat, lng },
+        ts: Date.now(),
+      };
+      this.addMessage(localMessage);
+
+      // Envoie au serveur (le serveur ne supporte peut-être pas les locations, on envoie comme texte)
+      socket?.emit("chat-msg", {
+        content: locationText,
+        roomName: roomId,
+        categorie: "MESSAGE",
+      });
+    },
+
     // ========== GESTION LOCALE ==========
 
     upsertRooms(next: Room[]) {

@@ -106,10 +106,22 @@ async function capturePhoto() {
     if (photo) {
       chat.sendMessage("", roomId, photo);
     }
-  } catch (error) {
-    console.warn("Capture impossible", error);
+  } catch {
+    // Capture silencieuse
   } finally {
     closeCamera();
+  }
+}
+
+// ===== GEOLOCALISATION =====
+import { useGeolocation } from "~/composables/useGeolocation";
+
+const { isLoading: geoLoading, getCurrentPosition } = useGeolocation();
+
+async function shareLocation() {
+  const position = await getCurrentPosition();
+  if (position) {
+    chat.sendLocation(position.lat, position.lng, roomId);
   }
 }
 
@@ -283,6 +295,16 @@ function unsubscribe() {
             title="Prendre une photo"
           >
             📸
+          </button>
+
+          <button
+            type="button"
+            class="rounded-full bg-slate-800 p-3 text-slate-400 transition hover:bg-slate-700 hover:text-white disabled:opacity-50"
+            :disabled="geoLoading"
+            @click="shareLocation"
+            title="Partager ma position"
+          >
+            {{ geoLoading ? '⏳' : '📍' }}
           </button>
 
           <input

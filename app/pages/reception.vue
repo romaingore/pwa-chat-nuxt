@@ -1,12 +1,31 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useProfile } from "~/stores/useProfile";
+import { useChat } from "~/stores/useChat";
 import { useCamera } from "~/composables/useCamera";
 import type { Room } from "~/types/chat";
 
 const profileStore = useProfile();
+const chatStore = useChat();
 const { data: profile } = storeToRefs(profileStore);
+const { notificationsEnabled } = storeToRefs(chatStore);
+
+// Etat des notifications
+const notificationStatus = ref<"granted" | "denied" | "default" | "unsupported">("default");
+
+onMounted(() => {
+  notificationStatus.value = chatStore.checkNotificationStatus() as typeof notificationStatus.value;
+});
+
+async function toggleNotifications() {
+  if (notificationsEnabled.value) {
+    // On ne peut pas revoquer les permissions, on informe l'utilisateur
+    return;
+  }
+  await chatStore.requestNotificationPermission();
+  notificationStatus.value = chatStore.checkNotificationStatus() as typeof notificationStatus.value;
+}
 
 const pseudo = ref(profile.value.pseudo);
 const photo = ref<string | undefined>(profile.value.photoDataUrl);
@@ -46,8 +65,8 @@ const {
 async function handleCapture() {
   try {
     photo.value = await capture();
-  } catch (error) {
-    console.warn("Capture impossible", error);
+  } catch {
+    // Gestion silencieuse de l'erreur de capture
   }
 }
 
@@ -159,6 +178,73 @@ function saveProfile() {
                   Utilisez la caméra pour une prise de vue instantanée. Vous
                   pourrez toujours revenir mettre à jour votre photo.
                 </p>
+              </div>
+            </div>
+
+            <!-- Notifications -->
+            <div class="space-y-3">
+              <span
+                class="text-xs font-medium uppercase tracking-widest text-slate-400"
+                >Notifications</span
+              >
+              <div
+                class="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/40 px-5 py-4"
+              >
+                <div class="flex items-center gap-3">
+                  <span
+                    class="flex h-10 w-10 items-center justify-center rounded-full text-xl"
+                    :class="
+                      notificationsEnabled
+                        ? 'bg-emerald-500/20 text-emerald-300'
+                        : 'bg-slate-800 text-slate-400'
+                    "
+                  >
+                    {{ notificationsEnabled ? '🔔' : '🔕' }}
+                  </span>
+                  <div>
+                    <p class="text-sm font-medium text-slate-200">
+                      {{ notificationsEnabled ? 'Notifications activées' : 'Notifications désactivées' }}
+                    </p>
+                    <p class="text-xs text-slate-400">
+                      <template v-if="notificationStatus === 'unsupported'">
+                        Non supportées par ce navigateur
+                      </template>
+                      <template v-else-if="notificationStatus === 'denied'">
+                        Bloquées dans les paramètres du navigateur
+                      </template>
+                      <template v-else-if="notificationsEnabled">
+                        Vous serez alerté des nouveaux messages
+                      </template>
+                      <template v-else>
+                        Activez pour ne rien manquer
+                      </template>
+                    </p>
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    v-if="notificationStatus !== 'unsupported' && notificationStatus !== 'denied'"
+                    type="button"
+                    class="rounded-full px-4 py-2 text-sm font-medium transition"
+                    :class="
+                      notificationsEnabled
+                        ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                        : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+                    "
+                    :disabled="notificationsEnabled"
+                    @click="toggleNotifications"
+                  >
+                    {{ notificationsEnabled ? 'Activées' : 'Activer' }}
+                  </button>
+                  <button
+                    v-if="notificationsEnabled"
+                    type="button"
+                    class="rounded-full border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-700"
+                    @click="chatStore.testNotification()"
+                  >
+                    Tester
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, navigateTo } from "#imports";
 import { useChat } from "~/stores/useChat";
 import { useProfile } from "~/stores/useProfile";
+import { useCamera } from "~/composables/useCamera";
 
 const route = useRoute();
 const roomId = route.params.id as string;
@@ -12,7 +13,14 @@ const chat = useChat();
 const profileStore = useProfile();
 const { data: profile } = storeToRefs(profileStore);
 
+// S'assurer que les données sont hydratées
 chat.ensureHydrated();
+
+// Rejoindre la room au montage de la page
+onMounted(() => {
+  const pseudo = profile.value.pseudo || "Anonyme";
+  chat.joinRoom(roomId, pseudo);
+});
 
 const { rooms } = storeToRefs(chat);
 
@@ -24,7 +32,7 @@ const roomMeta = computed(() => {
   };
 });
 
-// on affiche uniquement les messages appartenant à cette room
+// Messages de cette room uniquement
 const list = computed(() => chat.byRoom(roomId));
 
 const stats = computed(() => {
@@ -57,6 +65,55 @@ const formattedMessages = computed(() =>
   })
 );
 
+// ===== ENVOI DE MESSAGE =====
+const messageInput = ref("");
+
+function sendMessage() {
+  const text = messageInput.value.trim();
+  if (!text) return;
+
+  chat.sendMessage(text, roomId);
+  messageInput.value = "";
+}
+
+// ===== CAMERA =====
+const {
+  videoEl: previewVideoEl,
+  startPreview,
+  stopPreview,
+  capture,
+} = useCamera();
+
+const showCamera = ref(false);
+
+async function toggleCamera() {
+  if (showCamera.value) {
+    closeCamera();
+  } else {
+    showCamera.value = true;
+    await startPreview();
+  }
+}
+
+function closeCamera() {
+  showCamera.value = false;
+  stopPreview();
+}
+
+async function capturePhoto() {
+  try {
+    const photo = await capture();
+    if (photo) {
+      chat.sendMessage("", roomId, photo);
+    }
+  } catch (error) {
+    console.warn("Capture impossible", error);
+  } finally {
+    closeCamera();
+  }
+}
+
+// ===== QUITTER =====
 function unsubscribe() {
   chat.leaveRoom(roomId);
   navigateTo("/reception");
@@ -68,6 +125,7 @@ function unsubscribe() {
     class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100"
   >
     <div class="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-12">
+      <!-- Header -->
       <header
         class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between"
       >
@@ -107,16 +165,17 @@ function unsubscribe() {
         </div>
       </header>
 
+      <!-- Zone de chat -->
       <div
         class="flex min-h-[26rem] flex-col overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-950/50 shadow-xl shadow-slate-950/40"
       >
+        <!-- Messages -->
         <div class="flex-1 space-y-5 overflow-y-auto px-6 py-10">
           <div
             v-if="formattedMessages.length === 0"
             class="text-center text-sm text-slate-400"
           >
-            Aucun message enregistré pour ce salon. Rejoignez la conversation
-            depuis la réception.
+            Aucun message dans ce salon. Soyez le premier à écrire !
           </div>
 
           <template v-else>
@@ -178,6 +237,69 @@ function unsubscribe() {
             </div>
           </template>
         </div>
+
+        <!-- Camera popup -->
+        <div v-if="showCamera" class="relative flex flex-col items-center">
+          <div
+            class="absolute bottom-20 z-20 flex w-72 flex-col gap-3 rounded-2xl border border-slate-700 bg-slate-900 p-3 shadow-2xl"
+          >
+            <div class="relative overflow-hidden rounded-lg bg-black">
+              <video
+                ref="previewVideoEl"
+                autoplay
+                playsinline
+                muted
+                class="aspect-square w-full object-cover"
+              ></video>
+            </div>
+            <div class="flex justify-between gap-2">
+              <button
+                type="button"
+                class="flex-1 rounded-lg border border-slate-600 bg-slate-800 py-2 text-xs font-semibold hover:bg-slate-700"
+                @click="closeCamera"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                class="flex-1 rounded-lg bg-emerald-500 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400"
+                @click="capturePhoto"
+              >
+                Capturer
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Barre d'envoi -->
+        <form
+          @submit.prevent="sendMessage"
+          class="flex items-center gap-4 border-t border-slate-800/60 bg-slate-950/30 p-4 sm:px-6 sm:py-5"
+        >
+          <button
+            type="button"
+            class="rounded-full bg-slate-800 p-3 text-slate-400 transition hover:bg-slate-700 hover:text-white"
+            @click="toggleCamera"
+            title="Prendre une photo"
+          >
+            📸
+          </button>
+
+          <input
+            v-model="messageInput"
+            type="text"
+            placeholder="Écrivez votre message..."
+            class="w-full flex-1 rounded-2xl border border-slate-800 bg-slate-900/80 px-5 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          />
+
+          <button
+            type="submit"
+            :disabled="!messageInput.trim()"
+            class="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Envoyer
+          </button>
+        </form>
       </div>
     </div>
   </section>

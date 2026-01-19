@@ -17,9 +17,7 @@ async function initialiseVideo(video: HTMLVideoElement): Promise<void> {
   video.playsInline = true;
   video.muted = true;
   await waitForMetadata(video);
-  await video.play().catch((error) => {
-    console.warn("Lecture vidéo impossible", error);
-  });
+  await video.play().catch(() => {});
   await new Promise((resolve) => setTimeout(resolve, 180));
   await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
 }
@@ -77,15 +75,10 @@ export function useCamera() {
   async function startPreview() {
     if (previewStream.value) return;
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: CAMERA_CONSTRAINTS,
-      });
-      previewStream.value = stream;
-    } catch (error) {
-      console.warn("Impossible d'accéder à la caméra", error);
-      throw error;
-    }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: CAMERA_CONSTRAINTS,
+    });
+    previewStream.value = stream;
   }
 
   function stopPreview() {
@@ -116,11 +109,7 @@ export function useCamera() {
       if (!video) return;
       if (stream) {
         video.srcObject = stream;
-        try {
-          await initialiseVideo(video);
-        } catch (error) {
-          console.warn("Impossible de lancer la prévisualisation", error);
-        }
+        await initialiseVideo(video).catch(() => {});
       } else {
         video.pause();
         video.srcObject = null;

@@ -72,42 +72,86 @@ export const useChat = defineStore("chat", {
       });
 
       // Réception d'un message
-      socket.on("chat-msg", (payload: any) => {
-        const contentStr =
-          typeof payload.content === "string"
-            ? payload.content
-            : payload.content?.description || "";
+      socket.on("chat-msg", async (payload: any) => {
+        console.log("📨 Payload reçu:", payload); // DEBUG
 
+        // Selon la doc, content est toujours une string
+        const contentStr = String(payload.content || "");
         const category = payload.categorie || "MESSAGE";
         const isImage = category === "NEW_IMAGE";
 
-        // Ignore les messages système du serveur (on gère nous-mêmes)
-        if (category === "INFO" || payload.pseudo === "SERVER") {
+        // Ignore les messages système du serveur
+        if (category === "INFO") {
           return;
         }
 
-        // Tente de récupérer le pseudo depuis plusieurs sources possibles
-        const authorPseudo =
-          payload.pseudo ||
-          this.users[payload.userId] ||
-          payload.userId ||
-          "Anonyme";
+        // Ignore les messages liés aux images (on affiche déjà l'image via NEW_IMAGE)
+        // - Messages "[IMAGE] url..."
+        // - Messages contenant l'URL de l'API images
+        // - Messages qui sont juste un ID d'image (format: caractères alphanumériques avec tirets/underscores)
+        const isImageRelatedMessage =
+          contentStr.startsWith("[IMAGE]") ||
+          contentStr.includes("api/images/") ||
+          /^[\w-]{10,30}$/.test(contentStr.trim());
+
+        if (isImageRelatedMessage && category === "MESSAGE") {
+          return;
+        }
+
+        // Récupère le pseudo
+        // Pour les images, le pseudo est "SERVER" mais le vrai pseudo est dans le content
+        // Format: "Nouvelle image pour le user {pseudo}."
+        let authorPseudo = "Anonyme";
+        if (isImage && contentStr.includes("pour le user ")) {
+          const match = contentStr.match(/pour le user ([^.]+)/);
+          if (match) {
+            authorPseudo = match[1];
+          }
+        } else if (payload.pseudo && payload.pseudo !== "SERVER") {
+          authorPseudo = payload.pseudo;
+        } else if (this.users[payload.userId]) {
+          authorPseudo = this.users[payload.userId];
+        }
+
+        let photoDataUrl: string | undefined;
+
+        // Si c'est une image (catégorie "NEW_IMAGE"), on la récupère via l'API
+        // L'ID de l'image est dans payload.id_image
+        if (isImage && payload.id_image) {
+          try {
+            const response = await fetch(`/api/image/${payload.id_image}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.success && data.data_image) {
+                photoDataUrl = data.data_image;
+              }
+            }
+          } catch (e) {
+            console.error("Erreur chargement image:", e);
+          }
+        }
+
+        // Si on a trouvé une photo, on efface le texte pour ne pas afficher l'ID
+        const finalContent = photoDataUrl ? "" : contentStr;
 
         const newMessage: Message = {
           id: crypto.randomUUID(),
           roomId: payload.roomName || "general",
           author: authorPseudo,
-          text: isImage ? "" : contentStr,
-          photoDataUrl: isImage ? contentStr : undefined,
+          text: finalContent,
+          photoDataUrl: photoDataUrl,
           ts: new Date(payload.dateEmis).getTime(),
         };
 
-        // Évite les doublons (si on a déjà ajouté le message en local)
+        // Évite les doublons - pour les images, on compare aussi le contenu original (l'ID)
+        // car le text sera vide après traitement
         const isDuplicate = this.messages.some(
           (m) =>
             m.author === this.currentPseudo &&
-            m.text === newMessage.text &&
-            Math.abs(m.ts - newMessage.ts) < 5000
+            Math.abs(m.ts - newMessage.ts) < 5000 &&
+            (isImage
+              ? m.photoDataUrl === photoDataUrl // Pour les images, compare le dataUrl
+              : m.text === newMessage.text) // Pour le texte, compare le texte
         );
 
         if (!isDuplicate) {
@@ -187,7 +231,7 @@ export const useChat = defineStore("chat", {
     /**
      * Envoie un message texte ou image
      */
-    sendMessage(text: string, roomId: string, image?: string) {
+    async sendMessage(text: string, roomId: string, image?: string) {
       // 1. Ajoute immédiatement le message en local (optimistic UI)
       const localMessage: Message = {
         id: crypto.randomUUID(),
@@ -201,11 +245,30 @@ export const useChat = defineStore("chat", {
 
       // 2. Envoie au serveur
       if (image) {
-        socket?.emit("chat-msg", {
-          content: image,
-          roomName: roomId,
-          categorie: "NEW_IMAGE",
-        });
+        try {
+          // Upload l'image via notre proxy local
+          const response = await fetch("/api/upload-image", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              id: socket?.id,
+              image_data: image,
+            }),
+          });
+
+          if (response.ok) {
+            // Envoie la référence de l'image via Socket.IO
+            socket?.emit("chat-msg", {
+              content: socket?.id, // L'ID sert de référence pour récupérer l'image
+              roomName: roomId,
+              categorie: "NEW_IMAGE",
+            });
+          }
+        } catch (error) {
+          // En cas d'erreur, on garde le message local mais on ne l'envoie pas
+        }
       } else if (text) {
         socket?.emit("chat-msg", {
           content: text,

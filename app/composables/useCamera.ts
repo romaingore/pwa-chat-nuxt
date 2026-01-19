@@ -17,7 +17,7 @@ async function initialiseVideo(video: HTMLVideoElement): Promise<void> {
   video.playsInline = true;
   video.muted = true;
   await waitForMetadata(video);
-  await video.play().catch(() => {});
+  await video.play().catch(() => { });
   await new Promise((resolve) => setTimeout(resolve, 180));
   await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
 }
@@ -25,8 +25,23 @@ async function initialiseVideo(video: HTMLVideoElement): Promise<void> {
 function drawFrame(video: HTMLVideoElement, stream?: MediaStream): string {
   const track = stream?.getVideoTracks()?.[0];
   const settings = track?.getSettings?.() ?? {};
-  const width = video.videoWidth || settings.width || 640;
-  const height = video.videoHeight || settings.height || 480;
+
+  // Limite la taille max à 800px pour éviter les payload trop lourds
+  const MAX_SIZE = 800;
+  let width = video.videoWidth || settings.width || 640;
+  let height = video.videoHeight || settings.height || 480;
+
+  if (width > height) {
+    if (width > MAX_SIZE) {
+      height *= MAX_SIZE / width;
+      width = MAX_SIZE;
+    }
+  } else {
+    if (height > MAX_SIZE) {
+      width *= MAX_SIZE / height;
+      height = MAX_SIZE;
+    }
+  }
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -41,7 +56,8 @@ function drawFrame(video: HTMLVideoElement, stream?: MediaStream): string {
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(video, 0, 0, width, height);
 
-  return canvas.toDataURL("image/png");
+  // Compression JPEG à 0.7 pour réduire la taille (vs PNG par défaut)
+  return canvas.toDataURL("image/jpeg", 0.7);
 }
 
 async function captureWithNewStream(): Promise<string> {
@@ -109,7 +125,7 @@ export function useCamera() {
       if (!video) return;
       if (stream) {
         video.srcObject = stream;
-        await initialiseVideo(video).catch(() => {});
+        await initialiseVideo(video).catch(() => { });
       } else {
         video.pause();
         video.srcObject = null;

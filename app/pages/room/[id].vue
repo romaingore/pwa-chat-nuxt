@@ -5,6 +5,7 @@ import { useRoute, navigateTo } from "#imports";
 import { useChat } from "~/stores/useChat";
 import { useProfile } from "~/stores/useProfile";
 import { useCamera } from "~/composables/useCamera";
+import { useBattery } from "~/composables/useBattery";
 
 const route = useRoute();
 const roomId = route.params.id as string;
@@ -21,6 +22,9 @@ onMounted(() => {
   const pseudo = profile.value.pseudo || "Anonyme";
   chat.joinRoom(roomId, pseudo);
 });
+
+// Batterie
+const { isSupported: batterySupported, level: batteryLevel, charging, getBatteryColor } = useBattery();
 
 const { rooms } = storeToRefs(chat);
 
@@ -72,19 +76,26 @@ function scrollToBottom() {
   nextTick(() => {
     setTimeout(() => {
       if (messagesContainer.value) {
-        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+        messagesContainer.value.scrollTo({
+          top: messagesContainer.value.scrollHeight,
+          behavior: 'smooth'
+        });
       }
-    }, 50);
+    }, 100);
   });
 }
 
-// Scroll au chargement et quand de nouveaux messages arrivent
+// Scroll au montage
+onMounted(() => {
+  scrollToBottom();
+});
+
+// Scroll quand de nouveaux messages arrivent
 watch(
   () => list.value.length,
   () => {
     scrollToBottom();
-  },
-  { immediate: true }
+  }
 );
 
 // ===== ENVOI DE MESSAGE =====
@@ -190,6 +201,15 @@ function unsubscribe() {
           >
             {{ stats.mediaCount }} média{{ stats.mediaCount === 1 ? "" : "s" }}
           </div>
+          <!-- Batterie -->
+          <div
+            v-if="batterySupported"
+            class="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1 text-xs font-semibold"
+            :class="getBatteryColor()"
+          >
+            <span>{{ charging ? '🔌' : '🔋' }}</span>
+            <span>{{ batteryLevel }}%</span>
+          </div>
           <button
             class="inline-flex items-center gap-2 rounded-full border border-red-500/70 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
             @click="unsubscribe"
@@ -204,7 +224,10 @@ function unsubscribe() {
         class="flex min-h-[26rem] flex-col overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-950/50 shadow-xl shadow-slate-950/40"
       >
         <!-- Messages -->
-        <div ref="messagesContainer" class="flex-1 space-y-5 overflow-y-auto px-6 py-10">
+        <div 
+          ref="messagesContainer" 
+          class="messages-container flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-6 py-10 max-h-[60vh]"
+        >
           <div
             v-if="formattedMessages.length === 0"
             class="text-center text-sm text-slate-400"
@@ -247,7 +270,7 @@ function unsubscribe() {
                   </span>
                 </div>
 
-                <p v-if="message.text" class="text-sm leading-relaxed">
+                <p v-if="message.text" class="text-sm leading-relaxed break-words whitespace-pre-wrap">
                   {{ message.text }}
                 </p>
 
@@ -348,3 +371,42 @@ function unsubscribe() {
     </div>
   </section>
 </template>
+
+<style scoped>
+.messages-container {
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar personnalisée */
+.messages-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.messages-container::-webkit-scrollbar-track {
+  background: rgb(15 23 42); /* slate-900 */
+  border-radius: 4px;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+  background: rgb(51 65 85); /* slate-700 */
+  border-radius: 4px;
+}
+
+.messages-container::-webkit-scrollbar-thumb:hover {
+  background: rgb(71 85 105); /* slate-600 */
+}
+
+/* Firefox */
+.messages-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(51 65 85) rgb(15 23 42);
+}
+
+/* Word wrap pour les messages */
+.message-bubble {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+</style>
+

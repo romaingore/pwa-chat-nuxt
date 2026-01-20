@@ -79,8 +79,17 @@ export const useChat = defineStore("chat", {
         const category = payload.categorie || "MESSAGE";
         const isImage = category === "NEW_IMAGE";
 
-        // Ignore les messages système du serveur
+        // Messages système du serveur (INFO) - join/leave notifications
         if (category === "INFO") {
+          // Affiche les messages INFO du serveur comme messages système
+          const infoMessage: Message = {
+            id: crypto.randomUUID(),
+            roomId: payload.roomName || "general",
+            author: "Système",
+            text: contentStr,
+            ts: new Date(payload.dateEmis).getTime() || Date.now(),
+          };
+          this.addMessage(infoMessage);
           return;
         }
 
@@ -187,40 +196,16 @@ export const useChat = defineStore("chat", {
         }
       });
 
-      // Quelqu'un rejoint une room
+      // Quelqu'un rejoint une room - mise à jour de la liste des utilisateurs
       socket.on("chat-joined-room", (payload: any) => {
         if (payload.clients) {
           Object.entries(payload.clients).forEach(
             ([id, client]: [string, any]) => {
-              // Si c'est un nouveau utilisateur (pas encore dans notre liste)
-              if (!this.users[id] && client.pseudo) {
-                // Ajoute un message système
-                const systemMessage: Message = {
-                  id: crypto.randomUUID(),
-                  roomId: payload.roomName || "general",
-                  author: "Système",
-                  text: `${client.pseudo} a rejoint le salon`,
-                  ts: Date.now(),
-                };
-                this.addMessage(systemMessage);
+              if (client.pseudo) {
+                this.users[id] = client.pseudo;
               }
-              this.users[id] = client.pseudo;
             }
           );
-        }
-      });
-
-      // Quelqu'un quitte
-      socket.on("chat-disconnected", (payload: any) => {
-        if (payload.pseudo) {
-          const systemMessage: Message = {
-            id: crypto.randomUUID(),
-            roomId: payload.roomName || "general",
-            author: "Système",
-            text: `${payload.pseudo} a quitté le salon`,
-            ts: Date.now(),
-          };
-          this.addMessage(systemMessage);
         }
       });
     },

@@ -3,7 +3,11 @@ import { computed, ref, watch, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useProfile } from "~/stores/useProfile";
 import { useChat } from "~/stores/useChat";
+import { useBattery } from "~/composables/useBattery";
 import type { Room } from "~/types/chat";
+
+// Batterie
+const { isSupported: batterySupported, level: batteryLevel, charging, getBatteryColor } = useBattery();
 
 const profileStore = useProfile();
 const chatStore = useChat();
@@ -87,9 +91,20 @@ function saveProfile() {
   >
     <div class="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-12">
       <header class="space-y-2 text-center lg:text-left">
-        <p class="text-sm uppercase tracking-[0.3em] text-emerald-400">
-          Salon de discussion
-        </p>
+        <div class="flex items-center justify-between">
+          <p class="text-sm uppercase tracking-[0.3em] text-emerald-400">
+            Salon de discussion
+          </p>
+          <!-- Batterie -->
+          <div
+            v-if="batterySupported"
+            class="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1 text-xs font-semibold"
+            :class="getBatteryColor()"
+          >
+            <span>{{ charging ? '🔌' : '🔋' }}</span>
+            <span>{{ batteryLevel }}%</span>
+          </div>
+        </div>
         <h1 class="text-3xl font-semibold sm:text-4xl">
           Préparez votre arrivée
         </h1>

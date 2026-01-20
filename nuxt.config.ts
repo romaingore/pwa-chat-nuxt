@@ -6,6 +6,11 @@ export default defineNuxtConfig({
       title: "PWA Chat (Nuxt)",
       meta: [
         { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { name: "theme-color", content: "#111827" },
+      ],
+      link: [
+        { rel: "manifest", href: "/manifest.webmanifest" },
+        { rel: "apple-touch-icon", href: "/pwa-192x192.png" },
       ],
     },
   },

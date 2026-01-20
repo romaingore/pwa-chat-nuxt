@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from "vue";
+import { computed, ref, onMounted, watch, nextTick } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, navigateTo } from "#imports";
 import { useChat } from "~/stores/useChat";
@@ -63,6 +63,28 @@ const formattedMessages = computed(() =>
       date: new Date(message.ts).toLocaleDateString(),
     };
   })
+);
+
+// ===== SCROLL AUTO =====
+const messagesContainer = ref<HTMLElement | null>(null);
+
+function scrollToBottom() {
+  nextTick(() => {
+    setTimeout(() => {
+      if (messagesContainer.value) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+      }
+    }, 50);
+  });
+}
+
+// Scroll au chargement et quand de nouveaux messages arrivent
+watch(
+  () => list.value.length,
+  () => {
+    scrollToBottom();
+  },
+  { immediate: true }
 );
 
 // ===== ENVOI DE MESSAGE =====
@@ -182,7 +204,7 @@ function unsubscribe() {
         class="flex min-h-[26rem] flex-col overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-950/50 shadow-xl shadow-slate-950/40"
       >
         <!-- Messages -->
-        <div class="flex-1 space-y-5 overflow-y-auto px-6 py-10">
+        <div ref="messagesContainer" class="flex-1 space-y-5 overflow-y-auto px-6 py-10">
           <div
             v-if="formattedMessages.length === 0"
             class="text-center text-sm text-slate-400"

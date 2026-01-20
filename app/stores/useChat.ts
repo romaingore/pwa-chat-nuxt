@@ -41,7 +41,7 @@ export const useChat = defineStore("chat", {
      * Initialise la connexion Socket.IO au serveur
      */
     initSocket(pseudo: string) {
-      // Toujours mettre à jour le pseudo
+      // Toujours mettre à jour le pseudo, même si déjà connecté
       this.currentPseudo = pseudo;
 
       // Évite de recréer si déjà connecté
@@ -73,7 +73,6 @@ export const useChat = defineStore("chat", {
 
       // Réception d'un message
       socket.on("chat-msg", async (payload: any) => {
-        console.log("📨 Payload reçu:", payload); // DEBUG
 
         // Selon la doc, content est toujours une string
         const contentStr = String(payload.content || "");
@@ -98,19 +97,29 @@ export const useChat = defineStore("chat", {
           return;
         }
 
-        // Récupère le pseudo
+        // Récupère le pseudo de l'auteur
         // Pour les images, le pseudo est "SERVER" mais le vrai pseudo est dans le content
         // Format: "Nouvelle image pour le user {pseudo}."
         let authorPseudo = "Anonyme";
+
+        // 1. Pour les images, extraire le pseudo du contenu
         if (isImage && contentStr.includes("pour le user ")) {
           const match = contentStr.match(/pour le user ([^.]+)/);
-          if (match) {
-            authorPseudo = match[1];
+          if (match && match[1]) {
+            authorPseudo = match[1].trim();
           }
-        } else if (payload.pseudo && payload.pseudo !== "SERVER") {
+        }
+        // 2. Utiliser le pseudo du payload s'il existe et n'est pas "SERVER"
+        else if (payload.pseudo && payload.pseudo !== "SERVER" && payload.pseudo.trim() !== "") {
           authorPseudo = payload.pseudo;
-        } else if (this.users[payload.userId]) {
+        }
+        // 3. Sinon chercher dans la liste des users par userId
+        else if (payload.userId && this.users[payload.userId]) {
           authorPseudo = this.users[payload.userId];
+        }
+        // 4. Sinon chercher par socketId (si disponible)
+        else if (payload.socketId && this.users[payload.socketId]) {
+          authorPseudo = this.users[payload.socketId];
         }
 
         let photoDataUrl: string | undefined;
@@ -143,23 +152,30 @@ export const useChat = defineStore("chat", {
           ts: new Date(payload.dateEmis).getTime(),
         };
 
-        // Évite les doublons - pour les images, on compare aussi le contenu original (l'ID)
-        // car le text sera vide après traitement
-        const isDuplicate = this.messages.some(
+        // Vérifie si c'est notre propre message (envoyé localement avec optimistic UI)
+        // On compare le pseudo en ignorant la casse
+        const isOwnMessage = authorPseudo.toLowerCase() === this.currentPseudo.toLowerCase();
+
+        // Évite les doublons - pour nos propres messages, on vérifie le texte et le timestamp
+        const existingMessage = this.messages.find(
           (m) =>
-            m.author === this.currentPseudo &&
             Math.abs(m.ts - newMessage.ts) < 5000 &&
             (isImage
-              ? m.photoDataUrl === photoDataUrl // Pour les images, compare le dataUrl
-              : m.text === newMessage.text) // Pour le texte, compare le texte
+              ? m.photoDataUrl === photoDataUrl
+              : m.text === newMessage.text)
         );
 
-        if (!isDuplicate) {
+        if (existingMessage) {
+          // Si le message existe déjà (optimistic UI), on met à jour l'auteur avec celui du serveur
+          if (existingMessage.author !== authorPseudo && isOwnMessage) {
+            existingMessage.author = authorPseudo;
+            lsWrite("messages", this.messages);
+          }
+        } else {
           this.addMessage(newMessage);
 
           // Notification si message d'un autre utilisateur
-          const isFromOther = authorPseudo.toLowerCase() !== this.currentPseudo.toLowerCase();
-          if (isFromOther) {
+          if (!isOwnMessage) {
             this.showNotification(newMessage);
           }
         }
@@ -207,6 +223,9 @@ export const useChat = defineStore("chat", {
      * Rejoint une room de chat
      */
     joinRoom(roomId: string, pseudo: string) {
+      // Toujours mettre à jour le pseudo local
+      this.currentPseudo = pseudo;
+
       if (!socket || !socket.connected) {
         this.initSocket(pseudo);
       }

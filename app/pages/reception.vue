@@ -16,6 +16,7 @@ const notificationStatus = ref<"granted" | "denied" | "default" | "unsupported">
 
 onMounted(() => {
   notificationStatus.value = chatStore.checkNotificationStatus() as typeof notificationStatus.value;
+  loadRooms();
 });
 
 async function toggleNotifications() {
@@ -30,11 +31,33 @@ async function toggleNotifications() {
 const pseudo = ref(profile.value.pseudo);
 const photo = ref<string | undefined>(profile.value.photoDataUrl);
 
-const availableRooms = ref<Room[]>([
-  { id: "general", name: "Général", joined: false },
-  { id: "random", name: "Random", joined: false },
-]);
+const availableRooms = ref<Room[]>([]);
+const isLoadingRooms = ref(true);
 
+// Charge les rooms depuis l'API
+async function loadRooms() {
+  isLoadingRooms.value = true;
+  try {
+    const response = await fetch("/api/rooms");
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.data) {
+        // Transforme l'objet en tableau de rooms
+        availableRooms.value = Object.keys(data.data).map((roomId) => ({
+          id: roomId,
+          name: roomId.charAt(0).toUpperCase() + roomId.slice(1),
+          joined: false,
+        }));
+      }
+    }
+  } catch (e) {
+    console.error("Erreur chargement rooms:", e);
+  } finally {
+    isLoadingRooms.value = false;
+  }
+}
+
+// Descriptions par défaut pour certaines rooms connues
 const roomDescriptions: Record<string, string> = {
   general: "Le salon principal pour discuter de tout et de rien.",
   random: "Partagez vos trouvailles, memes et inspirations.",
@@ -288,7 +311,26 @@ function saveProfile() {
           </div>
 
           <div class="space-y-4">
+            <!-- État de chargement -->
+            <div
+              v-if="isLoadingRooms"
+              class="flex items-center justify-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 px-5 py-8"
+            >
+              <div class="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent"></div>
+              <span class="text-sm text-slate-400">Chargement des salons...</span>
+            </div>
+
+            <!-- Aucune room disponible -->
+            <div
+              v-else-if="availableRooms.length === 0"
+              class="rounded-2xl border border-slate-800 bg-slate-950/40 px-5 py-8 text-center text-sm text-slate-400"
+            >
+              Aucun salon disponible pour le moment.
+            </div>
+
+            <!-- Liste des rooms -->
             <NuxtLink
+              v-else
               v-for="r in availableRooms"
               :key="r.id"
               :to="`/room/${r.id}`"

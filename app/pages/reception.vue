@@ -3,7 +3,6 @@ import { computed, ref, watch, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useProfile } from "~/stores/useProfile";
 import { useChat } from "~/stores/useChat";
-import { useCamera } from "~/composables/useCamera";
 import type { Room } from "~/types/chat";
 
 const profileStore = useProfile();
@@ -21,7 +20,6 @@ onMounted(() => {
 
 async function toggleNotifications() {
   if (notificationsEnabled.value) {
-    // On ne peut pas revoquer les permissions, on informe l'utilisateur
     return;
   }
   await chatStore.requestNotificationPermission();
@@ -29,10 +27,17 @@ async function toggleNotifications() {
 }
 
 const pseudo = ref(profile.value.pseudo);
-const photo = ref<string | undefined>(profile.value.photoDataUrl);
 
 const availableRooms = ref<Room[]>([]);
 const isLoadingRooms = ref(true);
+
+// Validation du pseudo (minimum 2 caractères)
+const isPseudoValid = computed(() => pseudo.value.trim().length >= 2);
+const pseudoError = computed(() => {
+  if (pseudo.value.trim().length === 0) return "";
+  if (pseudo.value.trim().length < 2) return "Le pseudo doit contenir au moins 2 caractères";
+  return "";
+});
 
 // Charge les rooms depuis l'API
 async function loadRooms() {
@@ -42,7 +47,6 @@ async function loadRooms() {
     if (response.ok) {
       const data = await response.json();
       if (data.success && data.data) {
-        // Transforme l'objet en tableau de rooms
         availableRooms.value = Object.keys(data.data).map((roomId) => ({
           id: roomId,
           name: roomId.charAt(0).toUpperCase() + roomId.slice(1),
@@ -67,34 +71,13 @@ watch(
   profile,
   (value) => {
     pseudo.value = value.pseudo;
-    photo.value = value.photoDataUrl;
   },
   { deep: true }
 );
 
-const pseudoInitial = computed(() => {
-  const initial = pseudo.value.trim().charAt(0);
-  return initial ? initial.toUpperCase() : "?";
-});
-
-const {
-  videoEl: previewVideoEl,
-  isPreviewing,
-  startPreview,
-  stopPreview,
-  capture,
-} = useCamera();
-
-async function handleCapture() {
-  try {
-    photo.value = await capture();
-  } catch {
-    // Gestion silencieuse de l'erreur de capture
-  }
-}
-
 function saveProfile() {
-  profileStore.save({ pseudo: pseudo.value, photoDataUrl: photo.value });
+  if (!isPseudoValid.value) return;
+  profileStore.save({ pseudo: pseudo.value });
 }
 </script>
 
@@ -136,73 +119,24 @@ function saveProfile() {
             <label class="flex flex-col gap-2">
               <span
                 class="text-xs font-medium uppercase tracking-widest text-slate-400"
-                >Pseudo</span
+                >Pseudo <span class="text-red-400">*</span></span
               >
               <input
-                class="w-full rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-base text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                placeholder="Votre pseudo"
+                class="w-full rounded-2xl border px-4 py-3 text-base text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2"
+                :class="
+                  pseudoError
+                    ? 'border-red-500 bg-red-950/20 focus:border-red-400 focus:ring-red-500/30'
+                    : 'border-slate-800 bg-slate-950/60 focus:border-emerald-400 focus:ring-emerald-500/30'
+                "
+                placeholder="Votre pseudo (min. 2 caractères)"
                 v-model="pseudo"
+                @input="saveProfile"
               />
+              <span v-if="pseudoError" class="text-xs text-red-400">
+                {{ pseudoError }}
+              </span>
             </label>
 
-            <div class="space-y-3">
-              <span
-                class="text-xs font-medium uppercase tracking-widest text-slate-400"
-                >Photo de profil</span
-              >
-              <div class="flex flex-col gap-5 sm:flex-row sm:items-start">
-                <div class="flex flex-col items-center gap-3">
-                  <div
-                    class="flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 text-3xl font-semibold text-slate-500"
-                  >
-                    <video
-                      v-if="isPreviewing"
-                      ref="previewVideoEl"
-                      autoplay
-                      playsinline
-                      muted
-                      class="h-full w-full object-cover"
-                    ></video>
-                    <img
-                      v-else-if="photo"
-                      :src="photo"
-                      alt="photo de profil"
-                      class="h-full w-full object-cover"
-                    />
-                    <span v-else>{{ pseudoInitial }}</span>
-                  </div>
-                  <div class="flex flex-wrap justify-center gap-2">
-                    <button
-                      v-if="!isPreviewing"
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                      @click="startPreview"
-                    >
-                      🎥 Prévisualiser
-                    </button>
-                    <button
-                      v-else
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-800/70 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                      @click="stopPreview"
-                    >
-                      ✕ Fermer
-                    </button>
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
-                      @click="handleCapture"
-                    >
-                      📸 Capturer
-                    </button>
-                  </div>
-                </div>
-                <p class="text-sm text-slate-400 sm:max-w-[15rem]">
-                  Utilisez la caméra pour une prise de vue instantanée. Vous
-                  pourrez toujours revenir mettre à jour votre photo.
-                </p>
-              </div>
-            </div>
 
             <!-- Notifications -->
             <div class="space-y-3">
@@ -288,13 +222,19 @@ function saveProfile() {
               </p>
             </div>
 
-            <div class="flex justify-end">
-              <button
-                type="submit"
-                class="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
-              >
-                💾 Enregistrer mon profil
-              </button>
+            <div
+              v-if="isPseudoValid"
+              class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"
+            >
+              <span>✓</span>
+              <span>Profil prêt ! Vous pouvez rejoindre un salon.</span>
+            </div>
+            <div
+              v-else
+              class="flex items-center gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-300"
+            >
+              <span>⚠</span>
+              <span>Entrez un pseudo pour rejoindre un salon.</span>
             </div>
           </div>
         </form>
@@ -329,32 +269,44 @@ function saveProfile() {
             </div>
 
             <!-- Liste des rooms -->
-            <NuxtLink
-              v-else
-              v-for="r in availableRooms"
-              :key="r.id"
-              :to="`/room/${r.id}`"
-              class="group flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/40 px-5 py-4 transition hover:border-emerald-400/70 hover:bg-emerald-500/10"
-            >
-              <div>
-                <p
-                  class="text-base font-medium text-slate-100 group-hover:text-white"
-                >
-                  {{ r.name }}
-                </p>
-                <p class="text-xs text-slate-400">
-                  {{
-                    roomDescriptions[r.id] ??
-                    "Rejoignez la conversation en temps réel."
-                  }}
-                </p>
-              </div>
-              <span
-                class="rounded-full border border-emerald-500/60 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-300 transition group-hover:border-emerald-400 group-hover:text-emerald-200"
+            <template v-else>
+              <NuxtLink
+                v-for="r in availableRooms"
+                :key="r.id"
+                :to="isPseudoValid ? `/room/${r.id}` : undefined"
+                :class="[
+                  'group flex items-center justify-between gap-4 rounded-2xl border px-5 py-4 transition',
+                  isPseudoValid
+                    ? 'border-slate-800 bg-slate-950/40 hover:border-emerald-400/70 hover:bg-emerald-500/10 cursor-pointer'
+                    : 'border-slate-800/50 bg-slate-950/20 opacity-50 cursor-not-allowed'
+                ]"
+                @click.prevent="!isPseudoValid && undefined"
               >
-                Entrer
-              </span>
-            </NuxtLink>
+                <div>
+                  <p
+                    class="text-base font-medium text-slate-100 group-hover:text-white"
+                  >
+                    {{ r.name }}
+                  </p>
+                  <p class="text-xs text-slate-400">
+                    {{
+                      roomDescriptions[r.id] ??
+                      "Rejoignez la conversation en temps réel."
+                    }}
+                  </p>
+                </div>
+                <span
+                  class="rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-widest transition"
+                  :class="
+                    isPseudoValid
+                      ? 'border-emerald-500/60 text-emerald-300 group-hover:border-emerald-400 group-hover:text-emerald-200'
+                      : 'border-slate-700 text-slate-500'
+                  "
+                >
+                  {{ isPseudoValid ? 'Entrer' : 'Pseudo requis' }}
+                </span>
+              </NuxtLink>
+            </template>
           </div>
 
           <div

@@ -114,12 +114,18 @@ export const useChat = defineStore("chat", {
           authorPseudo = payload.pseudo;
         }
         // 3. Sinon chercher dans la liste des users par userId
-        else if (payload.userId && this.users[payload.userId]) {
-          authorPseudo = this.users[payload.userId];
+        else if (payload.userId) {
+          const userPseudo = this.users[payload.userId];
+          if (userPseudo) {
+            authorPseudo = userPseudo;
+          }
         }
         // 4. Sinon chercher par socketId (si disponible)
-        else if (payload.socketId && this.users[payload.socketId]) {
-          authorPseudo = this.users[payload.socketId];
+        else if (payload.socketId) {
+          const socketPseudo = this.users[payload.socketId];
+          if (socketPseudo) {
+            authorPseudo = socketPseudo;
+          }
         }
 
         let photoDataUrl: string | undefined;

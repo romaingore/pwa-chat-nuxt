@@ -20,6 +20,5 @@ jobs:
             cd /var/www/pwa-chat-nuxt
             git fetch --all
             git reset --hard origin/master
-            npm install
-            npm run build
-            pm2 restart pwa-chat
+            podman-compose down
+            podman-compose up -d --build

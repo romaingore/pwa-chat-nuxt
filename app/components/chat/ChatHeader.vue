@@ -29,6 +29,9 @@ defineEmits<{
         </span>
         <span v-else class="font-medium text-slate-200">inconnue</span>.
       </p>
+      <div class="mt-3">
+        <CommonBatteryBadge />
+      </div>
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
@@ -42,7 +45,6 @@ defineEmits<{
       >
         {{ stats.mediaCount }} média{{ stats.mediaCount === 1 ? "" : "s" }}
       </div>
-      <CommonBatteryBadge />
       <button
         class="inline-flex items-center gap-2 rounded-full border border-red-500/70 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
         @click="$emit('leave')"

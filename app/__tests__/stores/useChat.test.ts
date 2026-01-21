@@ -4,7 +4,7 @@ import { useChat } from "~/stores/useChat";
 import type { Message, Room } from "~/types/chat";
 
 // Mock du module storage
-vi.mock("~/utils/storage", () => ({
+vi.mock("~/utils/storageHelpers", () => ({
   lsRead: vi.fn((key: string, fallback: any) => fallback),
   lsWrite: vi.fn(() => true),
 }));
@@ -42,13 +42,8 @@ vi.stubGlobal("Notification", {
   requestPermission: vi.fn(() => Promise.resolve("granted")),
 });
 
-// Mock de navigator.vibrate
-Object.defineProperty(navigator, "vibrate", {
-  value: vi.fn(() => true),
-  writable: true,
-});
 
-import { lsRead, lsWrite } from "~/utils/storage";
+import { lsRead, lsWrite } from "~/utils/storageHelpers";
 import {
   isImageRelatedMessage,
   extractAuthorPseudo,

@@ -41,7 +41,7 @@ function onInput(event: Event) {
       <div>
         <h2 class="text-lg font-semibold">Mon profil</h2>
         <p class="mt-1 text-sm text-slate-400">
-          Un pseudo clair et une photo rendent les échanges plus chaleureux.
+          Un pseudo simple rend les échanges plus fluides.
         </p>
       </div>
 

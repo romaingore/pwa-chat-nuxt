@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { io, Socket } from "socket.io-client";
-import { lsRead, lsWrite } from "~/utils/storage";
+import { lsRead, lsWrite } from "~/utils/storageHelpers";
 import {
   isImageRelatedMessage,
   extractAuthorPseudo,
@@ -56,10 +56,8 @@ export const useChat = defineStore("chat", {
       }
 
       // Création de la connexion
-      // L'URL de base est https://api.tools.gavago.fr
-      // Le path Socket.IO est généralement /socket.io (par défaut)
       socket = io("https://api.tools.gavago.fr", {
-        path: "/socket.io", // Chemin standard Socket.IO
+        path: "/socket.io",
         transports: ["websocket", "polling"],
       });
 
@@ -95,7 +93,7 @@ export const useChat = defineStore("chat", {
           return;
         }
 
-        // Ignore les messages liés aux images (déjà affichés via NEW_IMAGE)
+        // Ignore les messages liés aux images (id_image)
         if (isImageRelatedMessage(contentStr) && category === "MESSAGE") {
           return;
         }
@@ -314,16 +312,11 @@ export const useChat = defineStore("chat", {
     },
 
     /**
-     * Affiche une notification et fait vibrer l'appareil
+     * Affiche une notification
      */
     async showNotification(message: Message) {
       const hasPermission = await this.requestNotificationPermission();
       if (!hasPermission) return;
-
-      // Vibreur (200ms, pause 100ms, 200ms)
-      if (navigator.vibrate) {
-        navigator.vibrate([200, 100, 200]);
-      }
 
       const body = message.photoDataUrl
         ? "📷 A envoyé une photo"

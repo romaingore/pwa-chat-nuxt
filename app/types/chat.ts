@@ -1,6 +1,6 @@
 export type Profile = {
   pseudo: string;
-  photoDataUrl?: string;
+
 };
 
 export type Room = {

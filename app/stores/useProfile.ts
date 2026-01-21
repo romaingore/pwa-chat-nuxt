@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { lsRead, lsWrite } from "~/utils/storage";
+import { lsRead, lsWrite } from "~/utils/storageHelpers";
 import type { Profile } from "~/types/chat";
 
 export const useProfile = defineStore("profile", {

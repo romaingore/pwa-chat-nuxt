@@ -3,12 +3,12 @@ import { setActivePinia, createPinia } from "pinia";
 import { useProfile } from "~/stores/useProfile";
 
 // Mock du module storage
-vi.mock("~/utils/storage", () => ({
+vi.mock("~/utils/storageHelpers", () => ({
   lsRead: vi.fn((key: string, fallback: any) => fallback),
   lsWrite: vi.fn(() => true),
 }));
 
-import { lsRead, lsWrite } from "~/utils/storage";
+import { lsRead, lsWrite } from "~/utils/storageHelpers";
 
 describe("useProfile store", () => {
   beforeEach(() => {

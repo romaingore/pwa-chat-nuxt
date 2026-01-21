@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { lsRead, lsWrite, ssRead, ssWrite } from "~/utils/storage";
+import { lsRead, lsWrite } from "~/utils/storageHelpers";
 
 describe("storage utils", () => {
   beforeEach(() => {
     localStorage.clear();
-    sessionStorage.clear();
+
     vi.clearAllMocks();
   });
 
@@ -80,48 +80,9 @@ describe("storage utils", () => {
     });
   });
 
-  describe("ssRead", () => {
-    it("retourne le fallback si la clé n'existe pas", () => {
-      const result = ssRead("nonexistent", "default");
-      expect(result).toBe("default");
-    });
 
-    it("retourne la valeur parsée si la clé existe", () => {
-      sessionStorage.setItem("test-key", JSON.stringify({ name: "test" }));
-      const result = ssRead("test-key", { name: "default" });
-      expect(result).toEqual({ name: "test" });
-    });
 
-    it("retourne le fallback si le JSON est invalide", () => {
-      sessionStorage.setItem("invalid-json", "not valid json");
-      const result = ssRead("invalid-json", "fallback");
-      expect(result).toBe("fallback");
-    });
 
-    it("retourne null si null est stocké (comportement JSON)", () => {
-      sessionStorage.setItem("null-value", JSON.stringify(null));
-      const result = ssRead("null-value", "fallback");
-      expect(result).toBeNull();
-    });
-  });
-
-  describe("ssWrite", () => {
-    it("écrit une valeur dans sessionStorage et retourne true", () => {
-      const result = ssWrite("write-test", { data: "value" });
-      expect(result).toBe(true);
-      expect(sessionStorage.getItem("write-test")).toBe(
-        JSON.stringify({ data: "value" })
-      );
-    });
-
-    it("écrit un tableau dans sessionStorage", () => {
-      const result = ssWrite("array-write", [1, 2, 3]);
-      expect(result).toBe(true);
-      expect(sessionStorage.getItem("array-write")).toBe(
-        JSON.stringify([1, 2, 3])
-      );
-    });
-  });
 
   describe("gestion des erreurs", () => {
     it("lsWrite retourne false si localStorage.setItem échoue", () => {
@@ -152,33 +113,7 @@ describe("storage utils", () => {
       });
     });
 
-    it("ssWrite retourne false si sessionStorage.setItem échoue", () => {
-      const originalSessionStorage = global.sessionStorage;
-      const mockStorage = {
-        getItem: vi.fn(),
-        setItem: vi.fn(() => {
-          throw new Error("QuotaExceededError");
-        }),
-        removeItem: vi.fn(),
-        clear: vi.fn(),
-        key: vi.fn(),
-        length: 0,
-      };
-      Object.defineProperty(global, "sessionStorage", {
-        value: mockStorage,
-        writable: true,
-        configurable: true,
-      });
 
-      const result = ssWrite("error-test", { data: "value" });
-      expect(result).toBe(false);
-
-      Object.defineProperty(global, "sessionStorage", {
-        value: originalSessionStorage,
-        writable: true,
-        configurable: true,
-      });
-    });
 
     it("lsRead retourne le fallback si localStorage.getItem échoue", () => {
       const originalLocalStorage = global.localStorage;
@@ -208,32 +143,6 @@ describe("storage utils", () => {
       });
     });
 
-    it("ssRead retourne le fallback si sessionStorage.getItem échoue", () => {
-      const originalSessionStorage = global.sessionStorage;
-      const mockStorage = {
-        getItem: vi.fn(() => {
-          throw new Error("SecurityError");
-        }),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-        clear: vi.fn(),
-        key: vi.fn(),
-        length: 0,
-      };
-      Object.defineProperty(global, "sessionStorage", {
-        value: mockStorage,
-        writable: true,
-        configurable: true,
-      });
 
-      const result = ssRead("error-test", "fallback");
-      expect(result).toBe("fallback");
-
-      Object.defineProperty(global, "sessionStorage", {
-        value: originalSessionStorage,
-        writable: true,
-        configurable: true,
-      });
-    });
   });
 });

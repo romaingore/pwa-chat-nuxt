@@ -1,6 +1,12 @@
 import { defineStore } from "pinia";
 import { io, Socket } from "socket.io-client";
 import { lsRead, lsWrite } from "~/utils/storage";
+import {
+  isImageRelatedMessage,
+  extractAuthorPseudo,
+  fetchImageFromApi,
+  findDuplicateMessage,
+} from "~/utils/chatHelpers";
 import type { Room, Message } from "~/types/chat";
 
 // Variable pour stocker la connexion socket (singleton)
@@ -73,123 +79,53 @@ export const useChat = defineStore("chat", {
 
       // Réception d'un message
       socket.on("chat-msg", async (payload: any) => {
-
-        // Selon la doc, content est toujours une string
         const contentStr = String(payload.content || "");
         const category = payload.categorie || "MESSAGE";
         const isImage = category === "NEW_IMAGE";
 
-        // Messages système du serveur (INFO) - join/leave notifications
+        // Messages système (INFO) - join/leave notifications
         if (category === "INFO") {
-          // Affiche les messages INFO du serveur comme messages système
-          const infoMessage: Message = {
+          this.addMessage({
             id: crypto.randomUUID(),
             roomId: payload.roomName || "general",
             author: "Système",
             text: contentStr,
             ts: new Date(payload.dateEmis).getTime() || Date.now(),
-          };
-          this.addMessage(infoMessage);
+          });
           return;
         }
 
-        // Ignore les messages liés aux images (on affiche déjà l'image via NEW_IMAGE)
-        // - Messages "[IMAGE] url..."
-        // - Messages contenant l'URL de l'API images
-        // - Messages qui sont juste un ID d'image (format: caractères alphanumériques avec tirets/underscores)
-        const isImageRelatedMessage =
-          contentStr.startsWith("[IMAGE]") ||
-          contentStr.includes("api/images/") ||
-          /^[\w-]{10,30}$/.test(contentStr.trim());
-
-        if (isImageRelatedMessage && category === "MESSAGE") {
+        // Ignore les messages liés aux images (déjà affichés via NEW_IMAGE)
+        if (isImageRelatedMessage(contentStr) && category === "MESSAGE") {
           return;
         }
 
-        // Récupère le pseudo de l'auteur
-        // Pour les images, le pseudo est "SERVER" mais le vrai pseudo est dans le content
-        // Format: "Nouvelle image pour le user {pseudo}."
-        let authorPseudo = "Anonyme";
-
-        // 1. Pour les images, extraire le pseudo du contenu
-        if (isImage && contentStr.includes("pour le user ")) {
-          const match = contentStr.match(/pour le user ([^.]+)/);
-          if (match && match[1]) {
-            authorPseudo = match[1].trim();
-          }
-        }
-        // 2. Utiliser le pseudo du payload s'il existe et n'est pas "SERVER"
-        else if (payload.pseudo && payload.pseudo !== "SERVER" && payload.pseudo.trim() !== "") {
-          authorPseudo = payload.pseudo;
-        }
-        // 3. Sinon chercher dans la liste des users par userId
-        else if (payload.userId) {
-          const userPseudo = this.users[payload.userId];
-          if (userPseudo) {
-            authorPseudo = userPseudo;
-          }
-        }
-        // 4. Sinon chercher par socketId (si disponible)
-        else if (payload.socketId) {
-          const socketPseudo = this.users[payload.socketId];
-          if (socketPseudo) {
-            authorPseudo = socketPseudo;
-          }
-        }
-
-        let photoDataUrl: string | undefined;
-
-        // Si c'est une image (catégorie "NEW_IMAGE"), on la récupère via l'API
-        // L'ID de l'image est dans payload.id_image
-        if (isImage && payload.id_image) {
-          try {
-            const response = await fetch(`/api/image/${payload.id_image}`);
-            if (response.ok) {
-              const data = await response.json();
-              if (data.success && data.data_image) {
-                photoDataUrl = data.data_image;
-              }
-            }
-          } catch (e) {
-            console.error("Erreur chargement image:", e);
-          }
-        }
-
-        // Si on a trouvé une photo, on efface le texte pour ne pas afficher l'ID
-        const finalContent = photoDataUrl ? "" : contentStr;
+        // Extraction du pseudo et de l'image
+        const authorPseudo = extractAuthorPseudo(payload, isImage, contentStr, this.users);
+        const photoDataUrl = isImage && payload.id_image
+          ? await fetchImageFromApi(payload.id_image)
+          : undefined;
 
         const newMessage: Message = {
           id: crypto.randomUUID(),
           roomId: payload.roomName || "general",
           author: authorPseudo,
-          text: finalContent,
-          photoDataUrl: photoDataUrl,
+          text: photoDataUrl ? "" : contentStr,
+          photoDataUrl,
           ts: new Date(payload.dateEmis).getTime(),
         };
 
-        // Vérifie si c'est notre propre message (envoyé localement avec optimistic UI)
-        // On compare le pseudo en ignorant la casse
+        // Gestion des doublons (optimistic UI)
         const isOwnMessage = authorPseudo.toLowerCase() === this.currentPseudo.toLowerCase();
-
-        // Évite les doublons - pour nos propres messages, on vérifie le texte et le timestamp
-        const existingMessage = this.messages.find(
-          (m) =>
-            Math.abs(m.ts - newMessage.ts) < 5000 &&
-            (isImage
-              ? m.photoDataUrl === photoDataUrl
-              : m.text === newMessage.text)
-        );
+        const existingMessage = findDuplicateMessage(this.messages, newMessage, isImage, photoDataUrl);
 
         if (existingMessage) {
-          // Si le message existe déjà (optimistic UI), on met à jour l'auteur avec celui du serveur
           if (existingMessage.author !== authorPseudo && isOwnMessage) {
             existingMessage.author = authorPseudo;
             lsWrite("messages", this.messages);
           }
         } else {
           this.addMessage(newMessage);
-
-          // Notification si message d'un autre utilisateur
           if (!isOwnMessage) {
             this.showNotification(newMessage);
           }

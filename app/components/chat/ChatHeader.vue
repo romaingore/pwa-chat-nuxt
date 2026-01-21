@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { useBattery } from "~/composables/useBattery";
-
 defineProps<{
   roomName: string;
   stats: {
@@ -13,9 +11,6 @@ defineProps<{
 defineEmits<{
   (e: "leave"): void;
 }>();
-
-// Batterie (géré localement dans le header)
-const { isSupported: batterySupported, level: batteryLevel, charging, getBatteryColor } = useBattery();
 </script>
 
 <template>
@@ -47,15 +42,7 @@ const { isSupported: batterySupported, level: batteryLevel, charging, getBattery
       >
         {{ stats.mediaCount }} média{{ stats.mediaCount === 1 ? "" : "s" }}
       </div>
-      <!-- Batterie -->
-      <div
-        v-if="batterySupported"
-        class="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1 text-xs font-semibold"
-        :class="getBatteryColor()"
-      >
-        <span>{{ charging ? '🔌' : '🔋' }}</span>
-        <span>{{ batteryLevel }}%</span>
-      </div>
+      <CommonBatteryBadge />
       <button
         class="inline-flex items-center gap-2 rounded-full border border-red-500/70 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
         @click="$emit('leave')"
